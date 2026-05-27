@@ -1,0 +1,20 @@
+export type LeadUi = {
+  id: string;
+  name?: string | null;
+  sector?: string | null;
+  city?: string | null;
+  sourceChannel?: string | null;
+  status?: string | null;
+  temperature?: string | null;
+  globalScore?: number | null;
+  confidenceScore?: number | null;
+  tags?: string[] | null;
+  notes?: string | null;
+  nextActionAt?: string | Date | null;
+  statusReason?: string | null;
+  weakSignals?: unknown[];
+  aiOutputs?: unknown[];
+  events?: unknown[];
+  scores?: unknown[];
+  actions?: unknown[];
+};
