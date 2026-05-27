@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum LeadStatus {
+  NEW
+  TO_QUALIFY
+  QUALIFIED
+  CONTACTED
+  IN_PROGRESS
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum LeadTemperature {
+  COLD
+  WARM
+  HOT
+}
+
+enum EventType {
+  MANUAL
+  GHL
+  EMAIL
+  SMS
+  CALL
+  LINKEDIN
+  NOTE
+  STATUS_CHANGE
+}
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+  FAILED
+}
+
+enum ActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  role      UserRole @default(OPERATOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedLeads Lead[]        @relation("LeadAssignedTo")
+  events        LeadEvent[]
+  actions       ActionQueue[]
+  logs          SystemLog[]
+}
+
+model Verticale {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  leads Lead[]
+}
+
+model Lead {
+  id          String  @id @default(cuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  website     String?
+
+  source        String?
+  sourceChannel String?
+  sector        String?
+  city          String?
+  department    String?
+
+  notes      String?
+  tags       String[]
+  channels   Json?
+  rawPayload Json?
+  metadata   Json?
+
+  status       LeadStatus      @default(NEW)
+  statusReason String?
+  temperature  LeadTemperature @default(COLD)
+
+  globalScore     Int?
+  confidenceScore Float?
+
+  ghlContactId     String?
+  ghlOpportunityId String?
+  ghlPipelineId    String?
+  ghlStageId       String?
+
+  verticaleId  String?
+  assignedToId String?
+
+  nextActionAt   DateTime?
+  lastActivityAt DateTime?
+  isArchived     Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  verticale  Verticale? @relation(fields: [verticaleId], references: [id], onDelete: SetNull)
+  assignedTo User?      @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  weakSignals LeadWeakSignal[]
+  scores      LeadScore[]
+  aiOutputs   LeadAiOutput[]
+  events      LeadEvent[]
+  actions     ActionQueue[]
+
+  @@index([status])
+  @@index([temperature])
+  @@index([globalScore])
+  @@index([confidenceScore])
+  @@index([verticaleId])
+  @@index([assignedToId])
+  @@index([sourceChannel])
+  @@index([lastActivityAt])
+  @@index([nextActionAt])
+  @@index([isArchived])
+  @@index([deletedAt])
+  @@index([ghlContactId])
+}
+
+model WeakSignal {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  label         String
+  description   String?
+  category      String?
+  defaultWeight Float    @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  leads LeadWeakSignal[]
+
+  @@index([category])
+}
+
+model LeadWeakSignal {
+  id            String   @id @default(cuid())
+  leadId        String
+  weakSignalId  String
+  confidence    Float
+  evidence      String?
+  value         String?
+  weightApplied Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lead       Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  weakSignal WeakSignal @relation(fields: [weakSignalId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, weakSignalId])
+  @@index([leadId])
+  @@index([weakSignalId])
+}
+
+model LeadScore {
+  id                     String   @id @default(cuid())
+  leadId                 String
+  businessPainScore       Int?
+  digitalWeaknessScore    Int?
+  growthPotentialScore    Int?
+  automationMaturityScore Int?
+  urgencyScore            Int?
+  visibilityGapScore      Int?
+  fitVerticaleScore       Int?
+  globalScore             Int?
+  explanation             String?
+  createdAt               DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([globalScore])
+}
+
+model LeadAiOutput {
+  id              String   @id @default(cuid())
+  leadId          String
+  channel         String?
+  sms             String?
+  emailSubject    String?
+  emailBody       String?
+  linkedinMessage String?
+  callAngle       String?
+  diagnostic      String?
+  modelUsed       String?
+  provider        String?
+  promptVersion   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([channel])
+  @@index([provider])
+  @@index([promptVersion])
+}
+
+model LeadEvent {
+  id          String   @id @default(cuid())
+  leadId      String
+  userId      String?
+  type        EventType
+  source      String?
+  title       String
+  description String?
+  payload     Json?
+  metadata    Json?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([userId])
+  @@index([type])
+  @@index([occurredAt])
+}
+
+model ActionQueue {
+  id                String         @id @default(cuid())
+  leadId            String?
+  userId            String?
+  title             String
+  description       String?
+  recommendedAction String?
+  priority          ActionPriority @default(MEDIUM)
+  status            ActionStatus   @default(PENDING)
+  dueDate           DateTime?
+  completedAt       DateTime?
+  metadata          Json?
+  isArchived        Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([userId])
+  @@index([priority])
+  @@index([status])
+  @@index([dueDate])
+  @@index([isArchived])
+  @@index([deletedAt])
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     LogLevel
+  message   String
+  context   String?
+  payload   Json?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([level])
+  @@index([userId])
+  @@index([createdAt])
+}
