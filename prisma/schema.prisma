@@ -102,7 +102,7 @@ model Lead {
   department    String?
 
   notes      String?
-  tags       String[]
+  tags       String[] @default([])
   channels   Json?
   rawPayload Json?
   metadata   Json?
@@ -171,7 +171,7 @@ model LeadWeakSignal {
   id            String   @id @default(cuid())
   leadId        String
   weakSignalId  String
-  confidence    Float
+  confidence    Float?
   evidence      String?
   value         String?
   weightApplied Float
@@ -187,18 +187,23 @@ model LeadWeakSignal {
 }
 
 model LeadScore {
-  id                     String   @id @default(cuid())
-  leadId                 String
-  businessPainScore       Int?
-  digitalWeaknessScore    Int?
-  growthPotentialScore    Int?
-  automationMaturityScore Int?
-  urgencyScore            Int?
-  visibilityGapScore      Int?
-  fitVerticaleScore       Int?
-  globalScore             Int?
-  explanation             String?
-  createdAt               DateTime @default(now())
+  id                        String    @id @default(cuid())
+  leadId                    String
+
+  businessPainScore         Int?
+  digitalWeaknessScore      Int?
+  growthPotentialScore      Int?
+  automationMaturityScore   Int?
+  urgencyScore              Int?
+  visibilityGapScore        Int?
+  fitVerticaleScore         Int?
+
+  globalScore               Int?
+
+  explanation               String?
+
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
