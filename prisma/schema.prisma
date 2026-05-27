@@ -84,7 +84,8 @@ model Verticale {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  leads Lead[]
+  leads         Lead[]
+  signalWeights VerticalSignalWeight[]
 }
 
 model Lead {
@@ -162,7 +163,8 @@ model WeakSignal {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  leads LeadWeakSignal[]
+  leads           LeadWeakSignal[]
+  verticalWeights VerticalSignalWeight[]
 
   @@index([category])
 }
@@ -184,6 +186,25 @@ model LeadWeakSignal {
   @@unique([leadId, weakSignalId])
   @@index([leadId])
   @@index([weakSignalId])
+}
+
+model VerticalSignalWeight {
+  id           String   @id @default(cuid())
+  verticaleId String
+  weakSignalId String
+  weight       Float
+  isActive     Boolean  @default(true)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  verticale  Verticale  @relation(fields: [verticaleId], references: [id], onDelete: Cascade)
+  weakSignal WeakSignal @relation(fields: [weakSignalId], references: [id], onDelete: Cascade)
+
+  @@unique([verticaleId, weakSignalId])
+  @@index([verticaleId])
+  @@index([weakSignalId])
+  @@index([isActive])
 }
 
 model LeadScore {
