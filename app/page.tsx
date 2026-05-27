@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#F8F6F1] px-6 py-10 text-[#141210]">
@@ -15,25 +17,35 @@ export default function Home() {
           meilleures opportunités commerciales à partir de signaux faibles.
         </p>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <Link
+          href="/leads"
+          className="mt-10 inline-flex w-fit items-center rounded bg-[#E63E1C] px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:opacity-90"
+        >
+          Entrer dans LeadPilot
+        </Link>
+
+        <div className="mt-14 grid gap-4 md:grid-cols-3">
           <div className="border border-neutral-300 bg-white p-6">
             <h2 className="font-semibold">Signaux faibles</h2>
             <p className="mt-2 text-sm text-neutral-600">
-              Website, Google Maps, Pages Jaunes, réseaux sociaux et données terrain.
+              Website, Google Maps, Pages Jaunes, réseaux sociaux et données
+              terrain.
             </p>
           </div>
 
           <div className="border border-neutral-300 bg-white p-6">
             <h2 className="font-semibold">Scoring explicable</h2>
             <p className="mt-2 text-sm text-neutral-600">
-              Chaque priorité commerciale doit être justifiée par des preuves observables.
+              Chaque priorité commerciale doit être justifiée par des preuves
+              observables.
             </p>
           </div>
 
           <div className="border border-neutral-300 bg-white p-6">
             <h2 className="font-semibold">Activation GHL</h2>
             <p className="mt-2 text-sm text-neutral-600">
-              Les meilleurs leads sont envoyés vers GoHighLevel avec contexte et accroches IA.
+              Les meilleurs leads sont envoyés vers GoHighLevel avec contexte et
+              accroches IA.
             </p>
           </div>
         </div>
