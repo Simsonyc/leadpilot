@@ -1,38 +1,42 @@
 "use client";
 
 import Link from "next/link";
-
-type Lead = {
-  id: string;
-  name?: string | null;
-  sector?: string | null;
-  city?: string | null;
-  sourceChannel?: string | null;
-  status?: string | null;
-  temperature?: string | null;
-  score?: number | null;
-  nextActionAt?: string | null;
-  tags?: string[] | null;
-  isArchived?: boolean | null;
-};
+import type { LeadUi } from "@/types/lead-ui";
 
 type LeadsTableProps = {
-  leads: Lead[];
+  leads: LeadUi[];
+  selectedIds: Set<string>;
+  onToggleSelected: (id: string) => void;
+  onToggleAll: () => void;
 };
 
-function formatDate(value?: string | null) {
+function formatDate(value?: string | Date | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("fr-FR").format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("fr-FR").format(date);
 }
 
 function badgeClass(value?: string | null) {
-  if (value === "hot") return "bg-red-500/15 text-red-300 border-red-500/30";
-  if (value === "warm") return "bg-amber-500/15 text-amber-300 border-amber-500/30";
-  if (value === "cold") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
-  return "bg-slate-800 text-slate-300 border-slate-700";
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "hot") return "border-red-500/30 bg-red-500/15 text-red-300";
+  if (normalized === "warm") return "border-amber-500/30 bg-amber-500/15 text-amber-300";
+  if (normalized === "cold") return "border-blue-500/30 bg-blue-500/15 text-blue-300";
+  return "border-slate-700 bg-slate-800 text-slate-300";
 }
 
-export function LeadsTable({ leads }: LeadsTableProps) {
+function getScore(lead: LeadUi) {
+  return lead.globalScore ?? lead.score ?? null;
+}
+
+export function LeadsTable({
+  leads,
+  selectedIds,
+  onToggleSelected,
+  onToggleAll,
+}: LeadsTableProps) {
+  const allSelected = leads.length > 0 && leads.every((lead) => selectedIds.has(lead.id));
+
   if (!leads.length) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center">
@@ -50,6 +54,15 @@ export function LeadsTable({ leads }: LeadsTableProps) {
         <table className="min-w-full divide-y divide-slate-800 text-sm">
           <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400">
             <tr>
+              <th className="px-4 py-4 text-left">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={onToggleAll}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                  aria-label="Sélectionner tous les leads"
+                />
+              </th>
               <th className="px-4 py-4 text-left">Nom</th>
               <th className="px-4 py-4 text-left">Secteur</th>
               <th className="px-4 py-4 text-left">Ville</th>
@@ -64,36 +77,55 @@ export function LeadsTable({ leads }: LeadsTableProps) {
           </thead>
 
           <tbody className="divide-y divide-slate-800">
-            {leads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-slate-800/40">
-                <td className="px-4 py-4 font-medium text-white">{lead.name || "Sans nom"}</td>
-                <td className="px-4 py-4 text-slate-300">{lead.sector || "—"}</td>
-                <td className="px-4 py-4 text-slate-300">{lead.city || "—"}</td>
-                <td className="px-4 py-4 text-slate-300">{lead.sourceChannel || "—"}</td>
-                <td className="px-4 py-4 text-slate-300">{lead.isArchived ? "archived" : lead.status || "—"}</td>
-                <td className="px-4 py-4">
-                  <span className={`rounded-full border px-3 py-1 text-xs ${badgeClass(lead.temperature)}`}>
-                    {lead.temperature || "—"}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-slate-300">{lead.score ?? "—"}</td>
-                <td className="px-4 py-4 text-slate-300">{formatDate(lead.nextActionAt)}</td>
-                <td className="px-4 py-4">
-                  <div className="flex flex-wrap gap-1">
-                    {(lead.tags || []).slice(0, 3).map((tag) => (
-                      <span key={tag} className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-4 text-right">
-                  <Link href={`/leads/${lead.id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
-                    Ouvrir
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {leads.map((lead) => {
+              const score = getScore(lead);
+
+              return (
+                <tr key={lead.id} className="hover:bg-slate-800/40">
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.id)}
+                      onChange={() => onToggleSelected(lead.id)}
+                      className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                      aria-label={`Sélectionner ${lead.name || "ce lead"}`}
+                    />
+                  </td>
+                  <td className="px-4 py-4 font-medium text-white">
+                    {lead.name || "Sans nom"}
+                  </td>
+                  <td className="px-4 py-4 text-slate-300">
+                    {lead.sector || lead.verticale || lead.vertical || "—"}
+                  </td>
+                  <td className="px-4 py-4 text-slate-300">{lead.city || "—"}</td>
+                  <td className="px-4 py-4 text-slate-300">{lead.sourceChannel || "—"}</td>
+                  <td className="px-4 py-4 text-slate-300">
+                    {lead.isArchived ? "archived" : lead.status || "—"}
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className={`rounded-full border px-3 py-1 text-xs ${badgeClass(lead.temperature)}`}>
+                      {lead.temperature || "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-slate-300">{score ?? "—"}</td>
+                  <td className="px-4 py-4 text-slate-300">{formatDate(lead.nextActionAt)}</td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {(lead.tags || []).slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <Link href={`/leads/${lead.id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
+                      Ouvrir
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

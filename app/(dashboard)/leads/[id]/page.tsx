@@ -11,12 +11,39 @@ import { LeadEventsPanel } from "@/components/leads/lead-events-panel";
 import type { LeadUi } from "@/types/lead-ui";
 
 type LeadAction = "idle" | "analyze" | "score" | "refresh";
+type ToastKind = "success" | "error";
+
+type Toast = {
+  id: number;
+  kind: ToastKind;
+  message: string;
+};
 
 function toDateTimeLocal(value?: string | Date | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 16);
+}
+
+function LeadDetailSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <div className="h-4 w-32 animate-pulse rounded bg-slate-800" />
+        <div className="mt-4 h-9 w-72 animate-pulse rounded bg-slate-800" />
+        <div className="mt-4 flex gap-2">
+          <div className="h-8 w-24 animate-pulse rounded-full bg-slate-800" />
+          <div className="h-8 w-24 animate-pulse rounded-full bg-slate-800" />
+          <div className="h-8 w-24 animate-pulse rounded-full bg-slate-800" />
+        </div>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="h-96 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+        <div className="h-96 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+      </div>
+    </div>
+  );
 }
 
 export default function LeadDetailPage() {
@@ -29,8 +56,17 @@ export default function LeadDetailPage() {
   const [archiving, setArchiving] = useState(false);
   const [actionLoading, setActionLoading] = useState<LeadAction>("idle");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  function showToast(kind: ToastKind, message: string) {
+    setToast({ id: Date.now(), kind, message });
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   async function loadLead(options?: { silent?: boolean }) {
     if (!options?.silent) {
@@ -44,15 +80,24 @@ export default function LeadDetailPage() {
         cache: "no-store",
       });
 
-      const result = await response.json();
+      const result: unknown = await response.json();
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        typeof result !== "object" ||
+        result === null ||
+        !("success" in result) ||
+        result.success !== true ||
+        !("data" in result)
+      ) {
         throw new Error("Impossible de charger ce lead.");
       }
 
-      setLead(result.data);
+      setLead(result.data as LeadUi);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      const message = err instanceof Error ? err.message : "Erreur inconnue.";
+      setError(message);
+      showToast("error", message);
     } finally {
       if (!options?.silent) {
         setLoading(false);
@@ -71,13 +116,11 @@ export default function LeadDetailPage() {
 
     setActionLoading(action);
     setError("");
-    setSuccess("");
-    setSaved(false);
 
     try {
       if (action === "refresh") {
         await loadLead({ silent: true });
-        setSuccess("Fiche lead rafraîchie.");
+        showToast("success", "Fiche lead rafraîchie.");
         return;
       }
 
@@ -86,13 +129,16 @@ export default function LeadDetailPage() {
           ? `/api/leads/${lead.id}/analyze-signals`
           : `/api/leads/${lead.id}/score`;
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-      });
+      const response = await fetch(endpoint, { method: "POST" });
+      const result: unknown = await response.json();
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        typeof result !== "object" ||
+        result === null ||
+        !("success" in result) ||
+        result.success !== true
+      ) {
         throw new Error(
           action === "analyze"
             ? "Analyse des signaux impossible."
@@ -101,14 +147,16 @@ export default function LeadDetailPage() {
       }
 
       await loadLead({ silent: true });
-
-      setSuccess(
+      showToast(
+        "success",
         action === "analyze"
           ? "Signaux analysés et fiche mise à jour."
           : "Score recalculé et fiche mise à jour.",
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      const message = err instanceof Error ? err.message : "Erreur inconnue.";
+      setError(message);
+      showToast("error", message);
     } finally {
       setActionLoading("idle");
     }
@@ -119,8 +167,6 @@ export default function LeadDetailPage() {
     if (!lead) return;
 
     setSaving(true);
-    setSaved(false);
-    setSuccess("");
     setError("");
 
     const form = new FormData(event.currentTarget);
@@ -149,16 +195,24 @@ export default function LeadDetailPage() {
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const result: unknown = await response.json();
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        typeof result !== "object" ||
+        result === null ||
+        !("success" in result) ||
+        result.success !== true
+      ) {
         throw new Error("Mise à jour impossible.");
       }
 
-      setLead(result.data);
-      setSaved(true);
+      await loadLead({ silent: true });
+      showToast("success", "Modifications enregistrées.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      const message = err instanceof Error ? err.message : "Erreur inconnue.";
+      setError(message);
+      showToast("error", message);
     } finally {
       setSaving(false);
     }
@@ -169,22 +223,31 @@ export default function LeadDetailPage() {
 
     setArchiving(true);
     setError("");
-    setSuccess("");
 
     try {
       const response = await fetch(`/api/leads/${lead.id}`, {
-        method: "DELETE",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: true, status: "archived" }),
       });
 
-      const result = await response.json();
+      const result: unknown = await response.json();
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        typeof result !== "object" ||
+        result === null ||
+        !("success" in result) ||
+        result.success !== true
+      ) {
         throw new Error("Archivage impossible.");
       }
 
       router.push("/leads");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue.");
+      const message = err instanceof Error ? err.message : "Erreur inconnue.";
+      setError(message);
+      showToast("error", message);
     } finally {
       setArchiving(false);
     }
@@ -194,8 +257,26 @@ export default function LeadDetailPage() {
 
   return (
     <AppShell>
-      {loading && (
-        <p className="text-sm text-slate-400">Chargement du lead...</p>
+      {toast && (
+        <div className="fixed right-4 top-4 z-50 max-w-sm">
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-lg ${
+              toast.kind === "success"
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
+                : "border-red-500/30 bg-red-500/15 text-red-200"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
+
+      {loading && <LeadDetailSkeleton />}
+
+      {!loading && error && !lead && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-sm text-red-300">
+          {error}
+        </div>
       )}
 
       {!loading && lead && (
@@ -209,9 +290,7 @@ export default function LeadDetailPage() {
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Actions cockpit
-                </h2>
+                <h2 className="text-lg font-semibold text-white">Actions cockpit</h2>
                 <p className="mt-1 text-sm text-slate-400">
                   Analyse digitale, scoring commercial et rafraîchissement de la fiche.
                 </p>
@@ -224,9 +303,7 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("analyze")}
                   className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "analyze"
-                    ? "Analyse..."
-                    : "Analyser les signaux"}
+                  {actionLoading === "analyze" ? "Analyse..." : "Analyser les signaux"}
                 </button>
 
                 <button
@@ -235,9 +312,7 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("score")}
                   className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "score"
-                    ? "Recalcul..."
-                    : "Recalculer le score"}
+                  {actionLoading === "score" ? "Recalcul..." : "Recalculer le score"}
                 </button>
 
                 <button
@@ -246,28 +321,10 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("refresh")}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "refresh"
-                    ? "Rafraîchissement..."
-                    : "Rafraîchir"}
+                  {actionLoading === "refresh" ? "Rafraîchissement..." : "Rafraîchir"}
                 </button>
               </div>
             </div>
-
-            {(success || error) && (
-              <div className="mt-4">
-                {success && (
-                  <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                    {success}
-                  </p>
-                )}
-
-                {error && (
-                  <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    {error}
-                  </p>
-                )}
-              </div>
-            )}
           </section>
 
           <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -275,15 +332,14 @@ export default function LeadDetailPage() {
               onSubmit={handleSave}
               className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
             >
-              <h2 className="text-lg font-semibold text-white">
-                Édition rapide
-              </h2>
+              <h2 className="text-lg font-semibold text-white">Édition rapide</h2>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <select
                   name="status"
                   defaultValue={lead.status || "new"}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
                   <option value="new">Nouveau</option>
                   <option value="to_qualify">À qualifier</option>
@@ -295,7 +351,8 @@ export default function LeadDetailPage() {
                 <select
                   name="temperature"
                   defaultValue={lead.temperature || "cold"}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
                   <option value="cold">Froid</option>
                   <option value="warm">Tiède</option>
@@ -306,7 +363,8 @@ export default function LeadDetailPage() {
                   name="nextActionAt"
                   type="datetime-local"
                   defaultValue={toDateTimeLocal(lead.nextActionAt)}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 />
 
                 <input
@@ -316,14 +374,16 @@ export default function LeadDetailPage() {
                   max="100"
                   defaultValue={lead.confidenceScore ?? ""}
                   placeholder="Confidence score"
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 />
 
                 <input
                   name="tags"
                   defaultValue={(lead.tags || []).join(", ")}
                   placeholder="Tags"
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50 md:col-span-2"
                 />
 
                 <textarea
@@ -331,7 +391,8 @@ export default function LeadDetailPage() {
                   defaultValue={lead.statusReason || ""}
                   placeholder="Raison du statut"
                   rows={3}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50 md:col-span-2"
                 />
 
                 <textarea
@@ -339,23 +400,18 @@ export default function LeadDetailPage() {
                   defaultValue={lead.notes || ""}
                   placeholder="Notes"
                   rows={6}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm md:col-span-2"
+                  disabled={saving}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50 md:col-span-2"
                 />
               </div>
 
               <div className="mt-5 flex items-center gap-3">
                 <button
                   disabled={saving}
-                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? "Enregistrement..." : "Enregistrer"}
                 </button>
-
-                {saved && (
-                  <p className="text-sm text-emerald-400">
-                    Modifications enregistrées.
-                  </p>
-                )}
               </div>
             </form>
 
