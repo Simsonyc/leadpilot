@@ -274,7 +274,7 @@ export default function LeadsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="w-full max-w-full overflow-hidden space-y-6">
         {toast && (
           <div className="fixed right-4 top-4 z-50 max-w-sm">
             <div
