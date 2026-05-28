@@ -49,10 +49,9 @@ export function LeadsTable({
   }
 
   return (
-  <div className="w-full max-w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-[1100px] divide-y divide-slate-800 text-sm">
-        <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400">
+  <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/60">
+    <table className="w-full min-w-[1100px] divide-y divide-slate-800 text-sm">
+              <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400">
           <tr>
             <th className="w-12 px-4 py-4 text-left">
               <input
@@ -195,6 +194,6 @@ export function LeadsTable({
         </tbody>
       </table>
     </div>
-  </div>
+  
 );
 }

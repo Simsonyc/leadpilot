@@ -427,13 +427,17 @@ export default function LeadsPage() {
         {loading && <LeadsSkeleton />}
         {error && <p className="text-sm text-red-400">{error}</p>}
         {!loading && !error && viewMode === "table" && (
-          <LeadsTable
-            leads={filteredLeads}
-            selectedIds={selectedIds}
-            onToggleSelected={toggleSelected}
-            onToggleAll={toggleAll}
-          />
-        )}
+  <div className="w-full max-w-full overflow-x-auto overflow-y-hidden rounded-2xl">
+    <div className="min-w-max">
+      <LeadsTable
+        leads={filteredLeads}
+        selectedIds={selectedIds}
+        onToggleSelected={toggleSelected}
+        onToggleAll={toggleAll}
+      />
+    </div>
+  </div>
+)}
         {!loading && !error && viewMode === "pipeline" && (
           <div className="grid gap-4 xl:grid-cols-5">
             {pipelineStatuses.map((status) => {
