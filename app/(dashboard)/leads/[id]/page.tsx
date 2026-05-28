@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
@@ -8,6 +8,7 @@ import { LeadScorePanel } from "@/components/leads/lead-score-panel";
 import { LeadSignalsPanel } from "@/components/leads/lead-signals-panel";
 import { LeadAiPanel } from "@/components/leads/lead-ai-panel";
 import { LeadEventsPanel } from "@/components/leads/lead-events-panel";
+import { LeadNextActionsPanel } from "@/components/leads/lead-next-actions-panel";
 import type { LeadUi } from "@/types/lead-ui";
 
 type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh";
@@ -42,6 +43,15 @@ function LeadDetailSkeleton() {
         <div className="h-96 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
         <div className="h-96 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
       </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="h-64 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+        <div className="h-64 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="h-56 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+        <div className="h-56 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+        <div className="h-56 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" />
+      </div>
     </div>
   );
 }
@@ -68,42 +78,49 @@ export default function LeadDetailPage() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  async function loadLead(options?: { silent?: boolean }) {
-    if (!options?.silent) setLoading(true);
+  const loadLead = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) setLoading(true);
+      setError("");
 
-    setError("");
+      try {
+        const response = await fetch(`/api/leads/${params.id}`, {
+          cache: "no-store",
+        });
 
-    try {
-      const response = await fetch(`/api/leads/${params.id}`, {
-        cache: "no-store",
-      });
+        const result: unknown = await response.json();
 
-      const result: unknown = await response.json();
+        if (
+          !response.ok ||
+          typeof result !== "object" ||
+          result === null ||
+          !("success" in result) ||
+          result.success !== true ||
+          !("data" in result)
+        ) {
+          throw new Error("Impossible de charger ce lead.");
+        }
 
-      if (
-        !response.ok ||
-        typeof result !== "object" ||
-        result === null ||
-        !("success" in result) ||
-        result.success !== true ||
-        !("data" in result)
-      ) {
-        throw new Error("Impossible de charger ce lead.");
+        setLead(result.data as LeadUi);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Erreur inconnue.";
+        setError(message);
+        showToast("error", message);
+      } finally {
+        if (!options?.silent) setLoading(false);
       }
-
-      setLead(result.data as LeadUi);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erreur inconnue.";
-      setError(message);
-      showToast("error", message);
-    } finally {
-      if (!options?.silent) setLoading(false);
-    }
-  }
+    },
+    [params.id],
+  );
 
   useEffect(() => {
     if (params.id) void loadLead();
-  }, [params.id]);
+  }, [params.id, loadLead]);
+
+  // Callback pour les next actions — refresh silencieux
+  const handleRefresh = useCallback(async () => {
+    await loadLead({ silent: true });
+  }, [loadLead]);
 
   async function runLeadAction(action: Exclude<LeadAction, "idle">) {
     if (!lead || actionLoading !== "idle") return;
@@ -140,7 +157,7 @@ export default function LeadDetailPage() {
             ? "Analyse des signaux impossible."
             : action === "score"
               ? "Recalcul du score impossible."
-              : "Génération de l’approche commerciale impossible.",
+              : "Génération de l'approche commerciale impossible.",
         );
       }
 
@@ -256,6 +273,7 @@ export default function LeadDetailPage() {
 
   return (
     <AppShell>
+      {/* Toast */}
       {toast && (
         <div className="fixed right-4 top-4 z-50 max-w-sm">
           <div
@@ -280,12 +298,14 @@ export default function LeadDetailPage() {
 
       {!loading && lead && (
         <div className="space-y-6">
+          {/* Header */}
           <LeadDetailHeader
             lead={lead}
             onArchive={handleArchive}
             archiving={archiving}
           />
 
+          {/* Actions cockpit */}
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -303,7 +323,7 @@ export default function LeadDetailPage() {
                   type="button"
                   disabled={isActionRunning}
                   onClick={() => void runLeadAction("analyze")}
-                  className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition-colors hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionLoading === "analyze"
                     ? "Analyse..."
@@ -314,7 +334,7 @@ export default function LeadDetailPage() {
                   type="button"
                   disabled={isActionRunning}
                   onClick={() => void runLeadAction("score")}
-                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionLoading === "score"
                     ? "Recalcul..."
@@ -325,7 +345,7 @@ export default function LeadDetailPage() {
                   type="button"
                   disabled={isActionRunning}
                   onClick={() => void runLeadAction("approach")}
-                  className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-300 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-300 transition-colors hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionLoading === "approach"
                     ? "Génération..."
@@ -336,7 +356,7 @@ export default function LeadDetailPage() {
                   type="button"
                   disabled={isActionRunning}
                   onClick={() => void runLeadAction("refresh")}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionLoading === "refresh"
                     ? "Rafraîchissement..."
@@ -346,6 +366,7 @@ export default function LeadDetailPage() {
             </div>
           </section>
 
+          {/* Édition rapide + Score */}
           <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
             <form
               onSubmit={handleSave}
@@ -358,7 +379,7 @@ export default function LeadDetailPage() {
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <select
                   name="status"
-                  defaultValue={lead.status || "NEW"}
+                  defaultValue={lead.status ?? "NEW"}
                   disabled={saving}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
@@ -374,7 +395,7 @@ export default function LeadDetailPage() {
 
                 <select
                   name="temperature"
-                  defaultValue={lead.temperature || "COLD"}
+                  defaultValue={lead.temperature ?? "COLD"}
                   disabled={saving}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
@@ -404,7 +425,7 @@ export default function LeadDetailPage() {
 
                 <input
                   name="tags"
-                  defaultValue={(lead.tags || []).join(", ")}
+                  defaultValue={(lead.tags ?? []).join(", ")}
                   placeholder="Tags"
                   disabled={saving}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50 md:col-span-2"
@@ -412,7 +433,7 @@ export default function LeadDetailPage() {
 
                 <textarea
                   name="statusReason"
-                  defaultValue={lead.statusReason || ""}
+                  defaultValue={lead.statusReason ?? ""}
                   placeholder="Raison du statut"
                   rows={3}
                   disabled={saving}
@@ -421,7 +442,7 @@ export default function LeadDetailPage() {
 
                 <textarea
                   name="notes"
-                  defaultValue={lead.notes || ""}
+                  defaultValue={lead.notes ?? ""}
                   placeholder="Notes"
                   rows={6}
                   disabled={saving}
@@ -432,7 +453,7 @@ export default function LeadDetailPage() {
               <div className="mt-5 flex items-center gap-3">
                 <button
                   disabled={saving}
-                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? "Enregistrement..." : "Enregistrer"}
                 </button>
@@ -442,8 +463,18 @@ export default function LeadDetailPage() {
             <LeadScorePanel lead={lead} />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
+          {/* Next actions + Signals + AI */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <LeadNextActionsPanel
+              leadId={lead.id}
+              nextActions={lead.nextActions ?? []}
+              onRefresh={handleRefresh}
+            />
             <LeadSignalsPanel lead={lead} />
+          </div>
+
+          {/* AI panel + Timeline */}
+          <div className="grid gap-6 lg:grid-cols-2">
             <LeadAiPanel lead={lead} />
             <LeadEventsPanel lead={lead} />
           </div>
