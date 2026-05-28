@@ -49,86 +49,152 @@ export function LeadsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-800 text-sm">
-          <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400">
-            <tr>
-              <th className="px-4 py-4 text-left">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={onToggleAll}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                  aria-label="Sélectionner tous les leads"
-                />
-              </th>
-              <th className="px-4 py-4 text-left">Nom</th>
-              <th className="px-4 py-4 text-left">Secteur</th>
-              <th className="px-4 py-4 text-left">Ville</th>
-              <th className="px-4 py-4 text-left">Source</th>
-              <th className="px-4 py-4 text-left">Statut</th>
-              <th className="px-4 py-4 text-left">Temp.</th>
-              <th className="px-4 py-4 text-left">Score</th>
-              <th className="px-4 py-4 text-left">Prochaine action</th>
-              <th className="px-4 py-4 text-left">Tags</th>
-              <th className="px-4 py-4 text-right">Action</th>
-            </tr>
-          </thead>
+  <div className="rounded-2xl border border-slate-800 bg-slate-900/60">
+    <div className="overflow-x-auto">
+      <table className="min-w-[1400px] divide-y divide-slate-800 text-sm">
+        <thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400">
+          <tr>
+            <th className="w-12 px-4 py-4 text-left">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleAll}
+                className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                aria-label="Sélectionner tous les leads"
+              />
+            </th>
 
-          <tbody className="divide-y divide-slate-800">
-            {leads.map((lead) => {
-              const score = getScore(lead);
+            <th className="min-w-[180px] px-4 py-4 text-left">Nom</th>
 
-              return (
-                <tr key={lead.id} className="hover:bg-slate-800/40">
-                  <td className="px-4 py-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(lead.id)}
-                      onChange={() => onToggleSelected(lead.id)}
-                      className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                      aria-label={`Sélectionner ${lead.name || "ce lead"}`}
-                    />
-                  </td>
-                  <td className="px-4 py-4 font-medium text-white">
+            <th className="min-w-[140px] px-4 py-4 text-left">
+              Secteur
+            </th>
+
+            <th className="min-w-[180px] px-4 py-4 text-left">Ville</th>
+
+            <th className="min-w-[260px] px-4 py-4 text-left">
+              Source
+            </th>
+
+            <th className="min-w-[120px] px-4 py-4 text-left">
+              Statut
+            </th>
+
+            <th className="min-w-[120px] px-4 py-4 text-left">
+              Temp.
+            </th>
+
+            <th className="min-w-[100px] px-4 py-4 text-left">
+              Score
+            </th>
+
+            <th className="min-w-[180px] px-4 py-4 text-left">
+              Prochaine action
+            </th>
+
+            <th className="min-w-[180px] px-4 py-4 text-left">
+              Tags
+            </th>
+
+            <th className="min-w-[140px] px-4 py-4 text-right">
+              Action
+            </th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-slate-800">
+          {leads.map((lead) => {
+            const score = getScore(lead);
+
+            return (
+              <tr
+                key={lead.id}
+                className="transition-colors hover:bg-slate-800/40"
+              >
+                <td className="px-4 py-4 align-top">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(lead.id)}
+                    onChange={() => onToggleSelected(lead.id)}
+                    className="h-4 w-4 rounded border-slate-700 bg-slate-950"
+                    aria-label={`Sélectionner ${lead.name || "ce lead"}`}
+                  />
+                </td>
+
+                <td className="px-4 py-4 align-top font-medium text-white">
+                  <div className="max-w-[220px] break-words">
                     {lead.name || "Sans nom"}
-                  </td>
-                  <td className="px-4 py-4 text-slate-300">
-                    {lead.sector || lead.verticale || lead.vertical || "—"}
-                  </td>
-                  <td className="px-4 py-4 text-slate-300">{lead.city || "—"}</td>
-                  <td className="px-4 py-4 text-slate-300">{lead.sourceChannel || "—"}</td>
-                  <td className="px-4 py-4 text-slate-300">
-                    {lead.isArchived ? "archived" : lead.status || "—"}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`rounded-full border px-3 py-1 text-xs ${badgeClass(lead.temperature)}`}>
-                      {lead.temperature || "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-slate-300">{score ?? "—"}</td>
-                  <td className="px-4 py-4 text-slate-300">{formatDate(lead.nextActionAt)}</td>
-                  <td className="px-4 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {(lead.tags || []).slice(0, 3).map((tag) => (
-                        <span key={tag} className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <Link href={`/leads/${lead.id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
-                      Ouvrir
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  {lead.sector ||
+                    lead.verticale ||
+                    lead.vertical ||
+                    "—"}
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  {lead.city || "—"}
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  <div className="max-w-[260px] break-all">
+                    {lead.sourceChannel || "—"}
+                  </div>
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  {lead.isArchived
+                    ? "ARCHIVED"
+                    : lead.status || "—"}
+                </td>
+
+                <td className="px-4 py-4 align-top">
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs ${badgeClass(
+                      lead.temperature,
+                    )}`}
+                  >
+                    {lead.temperature || "—"}
+                  </span>
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  {score ?? "—"}
+                </td>
+
+                <td className="px-4 py-4 align-top text-slate-300">
+                  {formatDate(lead.nextActionAt)}
+                </td>
+
+                <td className="px-4 py-4 align-top">
+                  <div className="flex max-w-[220px] flex-wrap gap-1">
+                    {(lead.tags || []).slice(0, 3).map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+
+                <td className="px-4 py-4 text-right align-top">
+                  <Link
+                    href={`/leads/${lead.id}`}
+                    className="inline-flex min-w-[90px] items-center justify-center rounded-lg border border-blue-500/20 px-3 py-2 text-sm font-medium text-blue-400 transition-colors hover:bg-blue-500/10 hover:text-blue-300"
+                  >
+                    Ouvrir
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
-  );
+  </div>
+);
 }

@@ -10,7 +10,7 @@ import { LeadAiPanel } from "@/components/leads/lead-ai-panel";
 import { LeadEventsPanel } from "@/components/leads/lead-events-panel";
 import type { LeadUi } from "@/types/lead-ui";
 
-type LeadAction = "idle" | "analyze" | "score" | "refresh";
+type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh";
 type ToastKind = "success" | "error";
 
 type Toast = {
@@ -69,9 +69,7 @@ export default function LeadDetailPage() {
   }, [toast]);
 
   async function loadLead(options?: { silent?: boolean }) {
-    if (!options?.silent) {
-      setLoading(true);
-    }
+    if (!options?.silent) setLoading(true);
 
     setError("");
 
@@ -99,16 +97,12 @@ export default function LeadDetailPage() {
       setError(message);
       showToast("error", message);
     } finally {
-      if (!options?.silent) {
-        setLoading(false);
-      }
+      if (!options?.silent) setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (params.id) {
-      void loadLead();
-    }
+    if (params.id) void loadLead();
   }, [params.id]);
 
   async function runLeadAction(action: Exclude<LeadAction, "idle">) {
@@ -127,7 +121,9 @@ export default function LeadDetailPage() {
       const endpoint =
         action === "analyze"
           ? `/api/leads/${lead.id}/analyze-signals`
-          : `/api/leads/${lead.id}/score`;
+          : action === "score"
+            ? `/api/leads/${lead.id}/score`
+            : `/api/leads/${lead.id}/generate-approach`;
 
       const response = await fetch(endpoint, { method: "POST" });
       const result: unknown = await response.json();
@@ -142,16 +138,21 @@ export default function LeadDetailPage() {
         throw new Error(
           action === "analyze"
             ? "Analyse des signaux impossible."
-            : "Recalcul du score impossible.",
+            : action === "score"
+              ? "Recalcul du score impossible."
+              : "Génération de l’approche commerciale impossible.",
         );
       }
 
       await loadLead({ silent: true });
+
       showToast(
         "success",
         action === "analyze"
           ? "Signaux analysés et fiche mise à jour."
-          : "Score recalculé et fiche mise à jour.",
+          : action === "score"
+            ? "Score recalculé et fiche mise à jour."
+            : "Approche commerciale générée et enregistrée.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erreur inconnue.";
@@ -226,9 +227,7 @@ export default function LeadDetailPage() {
 
     try {
       const response = await fetch(`/api/leads/${lead.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isArchived: true, status: "archived" }),
+        method: "DELETE",
       });
 
       const result: unknown = await response.json();
@@ -290,9 +289,12 @@ export default function LeadDetailPage() {
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Actions cockpit</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  Actions cockpit
+                </h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Analyse digitale, scoring commercial et rafraîchissement de la fiche.
+                  Analyse digitale, scoring commercial, approche IA et
+                  rafraîchissement.
                 </p>
               </div>
 
@@ -303,7 +305,9 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("analyze")}
                   className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "analyze" ? "Analyse..." : "Analyser les signaux"}
+                  {actionLoading === "analyze"
+                    ? "Analyse..."
+                    : "Analyser les signaux"}
                 </button>
 
                 <button
@@ -312,7 +316,20 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("score")}
                   className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "score" ? "Recalcul..." : "Recalculer le score"}
+                  {actionLoading === "score"
+                    ? "Recalcul..."
+                    : "Recalculer le score"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isActionRunning}
+                  onClick={() => void runLeadAction("approach")}
+                  className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-300 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === "approach"
+                    ? "Génération..."
+                    : "Générer approche commerciale"}
                 </button>
 
                 <button
@@ -321,7 +338,9 @@ export default function LeadDetailPage() {
                   onClick={() => void runLeadAction("refresh")}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {actionLoading === "refresh" ? "Rafraîchissement..." : "Rafraîchir"}
+                  {actionLoading === "refresh"
+                    ? "Rafraîchissement..."
+                    : "Rafraîchir"}
                 </button>
               </div>
             </div>
@@ -332,31 +351,36 @@ export default function LeadDetailPage() {
               onSubmit={handleSave}
               className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
             >
-              <h2 className="text-lg font-semibold text-white">Édition rapide</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Édition rapide
+              </h2>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <select
                   name="status"
-                  defaultValue={lead.status || "new"}
+                  defaultValue={lead.status || "NEW"}
                   disabled={saving}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
-                  <option value="new">Nouveau</option>
-                  <option value="to_qualify">À qualifier</option>
-                  <option value="qualified">Qualifié</option>
-                  <option value="contacted">Contacté</option>
-                  <option value="archived">Archivé</option>
+                  <option value="NEW">Nouveau</option>
+                  <option value="TO_QUALIFY">À qualifier</option>
+                  <option value="QUALIFIED">Qualifié</option>
+                  <option value="CONTACTED">Contacté</option>
+                  <option value="IN_PROGRESS">En cours</option>
+                  <option value="WON">Gagné</option>
+                  <option value="LOST">Perdu</option>
+                  <option value="ARCHIVED">Archivé</option>
                 </select>
 
                 <select
                   name="temperature"
-                  defaultValue={lead.temperature || "cold"}
+                  defaultValue={lead.temperature || "COLD"}
                   disabled={saving}
                   className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white disabled:opacity-50"
                 >
-                  <option value="cold">Froid</option>
-                  <option value="warm">Tiède</option>
-                  <option value="hot">Chaud</option>
+                  <option value="COLD">Froid</option>
+                  <option value="WARM">Tiède</option>
+                  <option value="HOT">Chaud</option>
                 </select>
 
                 <input
