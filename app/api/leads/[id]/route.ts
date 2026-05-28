@@ -1,7 +1,19 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { errorResponse, formatZodError } from "@/lib/utils";
+
+
+const pipelineStageSchema = z.enum([
+  "TO_CONTACT",
+  "QUALIFICATION",
+  "MEETING",
+  "PROPOSAL",
+  "FOLLOW_UP",
+  "CLOSING",
+  "LOST",
+]);
 
 const updateLeadSchema = z.object({
   status: z
@@ -17,6 +29,7 @@ const updateLeadSchema = z.object({
     ])
     .optional(),
 
+  pipelineStage: pipelineStageSchema.optional(),
   temperature: z.enum(["COLD", "WARM", "HOT"]).optional(),
 
   assignedToId: z.string().nullable().optional(),
@@ -39,6 +52,101 @@ type RouteParams = {
     id: string;
   }>;
 };
+
+function buildLeadChangeEvents(args: {
+  leadId: string;
+  previous: {
+    status: string;
+    pipelineStage: string;
+    notes: string | null;
+    nextActionAt: Date | null;
+  };
+  next: {
+    status?: string;
+    pipelineStage?: string;
+    notes?: string | null;
+    nextActionAt?: Date | null;
+  };
+}) {
+  const events: Array<{
+    leadId: string;
+    type:
+      | "STATUS_CHANGED"
+      | "NOTE_ADDED"
+      | "NEXT_ACTION_CREATED"
+      | "NEXT_ACTION_DELETED";
+    label: string;
+    payload: Prisma.InputJsonValue;
+  }> = [];
+
+  if (args.next.status && args.next.status !== args.previous.status) {
+    events.push({
+      leadId: args.leadId,
+      type: "STATUS_CHANGED",
+      label: `Statut modifié : ${args.previous.status} → ${args.next.status}`,
+      payload: {
+        field: "status",
+        from: args.previous.status,
+        to: args.next.status,
+      },
+    });
+  }
+
+  if (
+    args.next.pipelineStage &&
+    args.next.pipelineStage !== args.previous.pipelineStage
+  ) {
+    events.push({
+      leadId: args.leadId,
+      type: "STATUS_CHANGED",
+      label: `Pipeline modifié : ${args.previous.pipelineStage} → ${args.next.pipelineStage}`,
+      payload: {
+        field: "pipelineStage",
+        from: args.previous.pipelineStage,
+        to: args.next.pipelineStage,
+      },
+    });
+  }
+
+  if (
+    typeof args.next.notes !== "undefined" &&
+    args.next.notes !== args.previous.notes &&
+    args.next.notes !== null &&
+    args.next.notes.trim().length > 0
+  ) {
+    events.push({
+      leadId: args.leadId,
+      type: "NOTE_ADDED",
+      label: "Note mise à jour",
+      payload: {
+        notes: args.next.notes,
+      },
+    });
+  }
+
+  if (
+    typeof args.next.nextActionAt !== "undefined" &&
+    String(args.next.nextActionAt) !== String(args.previous.nextActionAt)
+  ) {
+    events.push({
+      leadId: args.leadId,
+      type: args.next.nextActionAt ? "NEXT_ACTION_CREATED" : "NEXT_ACTION_DELETED",
+      label: args.next.nextActionAt
+        ? "Prochaine action planifiée"
+        : "Prochaine action supprimée",
+      payload: {
+  from: args.previous.nextActionAt
+    ? args.previous.nextActionAt.toISOString()
+    : null,
+  to: args.next.nextActionAt
+    ? args.next.nextActionAt.toISOString()
+    : null,
+},
+    });
+  }
+
+  return events;
+}
 
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
@@ -77,6 +185,24 @@ export async function GET(_request: Request, { params }: RouteParams) {
             createdAt: "desc",
           },
         },
+        timelineEvents: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+        nextActions: {
+          orderBy: [
+            {
+              completed: "asc",
+            },
+            {
+              dueAt: "asc",
+            },
+            {
+              createdAt: "desc",
+            },
+          ],
+        },
       },
     });
 
@@ -112,6 +238,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       },
       select: {
         id: true,
+        status: true,
+        pipelineStage: true,
+        notes: true,
+        nextActionAt: true,
       },
     });
 
@@ -119,11 +249,42 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return errorResponse("Lead introuvable.", 404);
     }
 
-    const updatedLead = await prisma.lead.update({
-      where: {
-        id,
+    const now = new Date();
+
+    const timelineEvents = buildLeadChangeEvents({
+      leadId: id,
+      previous: {
+        status: existingLead.status,
+        pipelineStage: existingLead.pipelineStage,
+        notes: existingLead.notes,
+        nextActionAt: existingLead.nextActionAt,
       },
-      data: parsed.data,
+      next: {
+        status: parsed.data.status,
+        pipelineStage: parsed.data.pipelineStage,
+        notes: parsed.data.notes,
+        nextActionAt: parsed.data.nextActionAt,
+      },
+    });
+
+    const updatedLead = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.update({
+        where: {
+          id,
+        },
+        data: {
+          ...parsed.data,
+          lastActivityAt: now,
+        },
+      });
+
+      if (timelineEvents.length > 0) {
+        await tx.leadTimelineEvent.createMany({
+          data: timelineEvents,
+        });
+      }
+
+      return lead;
     });
 
     return NextResponse.json({
@@ -156,16 +317,33 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     const now = new Date();
 
-    const deletedLead = await prisma.lead.update({
-      where: {
-        id,
-      },
-      data: {
-        deletedAt: now,
-        isArchived: true,
-        status: "ARCHIVED",
-        lastActivityAt: now,
-      },
+    const deletedLead = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.update({
+        where: {
+          id,
+        },
+        data: {
+          deletedAt: now,
+          isArchived: true,
+          status: "ARCHIVED",
+          pipelineStage: "LOST",
+          lastActivityAt: now,
+        },
+      });
+
+      await tx.leadTimelineEvent.create({
+        data: {
+          leadId: id,
+          type: "STATUS_CHANGED",
+          label: "Lead archivé",
+          payload: {
+            status: "ARCHIVED",
+            pipelineStage: "LOST",
+          },
+        },
+      });
+
+      return lead;
     });
 
     return NextResponse.json({

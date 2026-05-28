@@ -29,6 +29,27 @@ enum LeadTemperature {
   HOT
 }
 
+enum PipelineStage {
+  TO_CONTACT
+  QUALIFICATION
+  MEETING
+  PROPOSAL
+  FOLLOW_UP
+  CLOSING
+  LOST
+}
+
+enum LeadTimelineEventType {
+  STATUS_CHANGED
+  SCORE_UPDATED
+  SIGNALS_ANALYZED
+  AI_APPROACH_GENERATED
+  NOTE_ADDED
+  NEXT_ACTION_CREATED
+  NEXT_ACTION_COMPLETED
+  NEXT_ACTION_DELETED
+}
+
 enum EventType {
   MANUAL
   GHL
@@ -108,9 +129,10 @@ model Lead {
   rawPayload Json?
   metadata   Json?
 
-  status       LeadStatus      @default(NEW)
-  statusReason String?
-  temperature  LeadTemperature @default(COLD)
+  status        LeadStatus      @default(NEW)
+  statusReason  String?
+  pipelineStage PipelineStage   @default(TO_CONTACT)
+  temperature   LeadTemperature @default(COLD)
 
   globalScore     Int?
   confidenceScore Float?
@@ -133,13 +155,16 @@ model Lead {
   verticale  Verticale? @relation(fields: [verticaleId], references: [id], onDelete: SetNull)
   assignedTo User?      @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
 
-  weakSignals LeadWeakSignal[]
-  scores      LeadScore[]
-  aiOutputs   LeadAiOutput[]
-  events      LeadEvent[]
-  actions     ActionQueue[]
+  weakSignals    LeadWeakSignal[]
+  scores         LeadScore[]
+  aiOutputs      LeadAiOutput[]
+  events         LeadEvent[]
+  actions        ActionQueue[]
+  timelineEvents LeadTimelineEvent[]
+  nextActions    LeadNextAction[]
 
   @@index([status])
+  @@index([pipelineStage])
   @@index([temperature])
   @@index([globalScore])
   @@index([confidenceScore])
@@ -276,6 +301,39 @@ model LeadEvent {
   @@index([userId])
   @@index([type])
   @@index([occurredAt])
+}
+
+model LeadTimelineEvent {
+  id        String                @id @default(cuid())
+  leadId    String
+  type      LeadTimelineEventType
+  label     String
+  payload   Json?
+  createdAt DateTime              @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model LeadNextAction {
+  id          String         @id @default(cuid())
+  leadId      String
+  label       String
+  dueAt       DateTime?
+  priority    ActionPriority @default(MEDIUM)
+  completed   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  completedAt DateTime?
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([dueAt])
+  @@index([priority])
+  @@index([completed])
 }
 
 model ActionQueue {

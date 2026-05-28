@@ -230,10 +230,30 @@ export default function LeadsPage() {
     setBulkLoading(action);
     setError("");
 
-    const payload =
-      action === "archive"
-        ? { isArchived: true, status: "archived" }
-        : { status: action };
+    let payload: Record<string, unknown>;
+
+switch (action) {
+  case "archive":
+    payload = {
+      isArchived: true,
+    };
+    break;
+
+  case "to_qualify":
+    payload = {
+      status: "TO_QUALIFY",
+    };
+    break;
+
+  case "contacted":
+    payload = {
+      status: "CONTACTED",
+    };
+    break;
+
+  default:
+    throw new Error("Action inconnue.");
+}
 
     try {
       await Promise.all(

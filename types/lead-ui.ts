@@ -1,3 +1,23 @@
+export type LeadTimelineEventUi = {
+  id: string;
+  leadId?: string;
+  type?: string | null;
+  label?: string | null;
+  payload?: unknown;
+  createdAt?: string | Date | null;
+};
+
+export type LeadNextActionUi = {
+  id: string;
+  leadId?: string;
+  label?: string | null;
+  dueAt?: string | Date | null;
+  priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT" | null;
+  completed?: boolean | null;
+  createdAt?: string | Date | null;
+  completedAt?: string | Date | null;
+};
+
 export type LeadUi = {
   id: string;
   name?: string | null;
@@ -7,6 +27,15 @@ export type LeadUi = {
   city?: string | null;
   sourceChannel?: string | null;
   status?: string | null;
+  pipelineStage?:
+    | "TO_CONTACT"
+    | "QUALIFICATION"
+    | "MEETING"
+    | "PROPOSAL"
+    | "FOLLOW_UP"
+    | "CLOSING"
+    | "LOST"
+    | null;
   temperature?: string | null;
   score?: number | null;
   globalScore?: number | null;
@@ -26,4 +55,6 @@ export type LeadUi = {
   events?: unknown[];
   scores?: unknown[];
   actions?: unknown[];
+  timelineEvents?: LeadTimelineEventUi[];
+  nextActions?: LeadNextActionUi[];
 };
