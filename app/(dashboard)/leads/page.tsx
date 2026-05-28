@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { LeadForm } from "@/components/leads/lead-form";
 import { LeadsTable } from "@/components/leads/leads-table";
+import {
+  PipelineKanban,
+  type PipelineStage,
+} from "@/components/leads/pipeline-kanban";
 import type { LeadUi } from "@/types/lead-ui";
 
 type ViewMode = "table" | "pipeline";
@@ -37,8 +41,6 @@ const emptyFilters: Filters = {
   minScore: "",
   tag: "",
 };
-
-const pipelineStatuses = ["new", "to_qualify", "qualified", "contacted", "archived"];
 
 function getScore(lead: LeadUi) {
   return lead.globalScore ?? lead.score ?? null;
@@ -125,6 +127,7 @@ export default function LeadsPage() {
       }
 
       const data = Array.isArray(result.data) ? (result.data as LeadUi[]) : [];
+
       setLeads(data);
       setSelectedIds((current) => {
         const existingIds = new Set(data.map((lead) => lead.id));
@@ -201,11 +204,13 @@ export default function LeadsPage() {
   function toggleSelected(id: string) {
     setSelectedIds((current) => {
       const next = new Set(current);
+
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
       }
+
       return next;
     });
   }
@@ -214,11 +219,13 @@ export default function LeadsPage() {
     setSelectedIds((current) => {
       const visibleIds = filteredLeads.map((lead) => lead.id);
       const allSelected = visibleIds.length > 0 && visibleIds.every((id) => current.has(id));
+
       if (allSelected) {
         const next = new Set(current);
         visibleIds.forEach((id) => next.delete(id));
         return next;
       }
+
       return new Set([...Array.from(current), ...visibleIds]);
     });
   }
@@ -232,28 +239,19 @@ export default function LeadsPage() {
 
     let payload: Record<string, unknown>;
 
-switch (action) {
-  case "archive":
-    payload = {
-      isArchived: true,
-    };
-    break;
-
-  case "to_qualify":
-    payload = {
-      status: "TO_QUALIFY",
-    };
-    break;
-
-  case "contacted":
-    payload = {
-      status: "CONTACTED",
-    };
-    break;
-
-  default:
-    throw new Error("Action inconnue.");
-}
+    switch (action) {
+      case "archive":
+        payload = { isArchived: true };
+        break;
+      case "to_qualify":
+        payload = { status: "TO_QUALIFY" };
+        break;
+      case "contacted":
+        payload = { status: "CONTACTED" };
+        break;
+      default:
+        throw new Error("Action inconnue.");
+    }
 
     try {
       await Promise.all(
@@ -290,6 +288,48 @@ switch (action) {
     }
   }
 
+  async function updateLeadPipelineStage(leadId: string, pipelineStage: PipelineStage) {
+    const previousLeads = leads;
+
+    setLeads((current) =>
+      current.map((lead) =>
+        lead.id === leadId
+          ? {
+              ...lead,
+              pipelineStage,
+            }
+          : lead,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pipelineStage }),
+      });
+
+      const result: unknown = await response.json();
+
+      if (
+        !response.ok ||
+        typeof result !== "object" ||
+        result === null ||
+        !("success" in result) ||
+        result.success !== true
+      ) {
+        throw new Error("Déplacement pipeline impossible.");
+      }
+
+      showToast("success", `Lead déplacé vers ${pipelineStage}.`);
+    } catch (err) {
+      setLeads(previousLeads);
+      const message = err instanceof Error ? err.message : "Erreur inconnue.";
+      setError(message);
+      showToast("error", message);
+    }
+  }
+
   const selectedCount = selectedIds.size;
 
   return (
@@ -323,6 +363,7 @@ switch (action) {
             >
               Vue {viewMode === "table" ? "Pipeline" : "Table"}
             </button>
+
             <button
               type="button"
               disabled={refreshing || loading}
@@ -428,15 +469,19 @@ switch (action) {
               <button type="button" onClick={() => setFilters(emptyFilters)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
                 Réinitialiser filtres
               </button>
+
               <button type="button" disabled={!selectedCount || Boolean(bulkLoading)} onClick={() => void runBulkAction("archive")} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
                 {bulkLoading === "archive" ? "Archivage..." : "Archiver sélection"}
               </button>
+
               <button type="button" disabled={!selectedCount || Boolean(bulkLoading)} onClick={() => void runBulkAction("to_qualify")} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
                 {bulkLoading === "to_qualify" ? "Mise à jour..." : "Marquer TO_QUALIFY"}
               </button>
+
               <button type="button" disabled={!selectedCount || Boolean(bulkLoading)} onClick={() => void runBulkAction("contacted")} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
                 {bulkLoading === "contacted" ? "Mise à jour..." : "Marquer CONTACTED"}
               </button>
+
               <button type="button" disabled={!selectedCount || Boolean(bulkLoading)} onClick={() => setSelectedIds(new Set())} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
                 Clear sélection
               </button>
@@ -446,80 +491,29 @@ switch (action) {
 
         {loading && <LeadsSkeleton />}
         {error && <p className="text-sm text-red-400">{error}</p>}
+
         {!loading && !error && viewMode === "table" && (
-  <div className="w-full max-w-full overflow-x-auto overflow-y-hidden rounded-2xl">
-    <div className="min-w-max">
-      <LeadsTable
-        leads={filteredLeads}
-        selectedIds={selectedIds}
-        onToggleSelected={toggleSelected}
-        onToggleAll={toggleAll}
-      />
-    </div>
-  </div>
-)}
-        {!loading && !error && viewMode === "pipeline" && (
-          <div className="grid gap-4 xl:grid-cols-5">
-            {pipelineStatuses.map((status) => {
-              const columnLeads = filteredLeads.filter((lead) => {
-                const leadStatus = lead.isArchived ? "archived" : normalize(lead.status || "new");
-                return leadStatus === status;
-              });
-
-              return (
-                <section key={status} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">{status}</h2>
-                    <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">{columnLeads.length}</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {columnLeads.length === 0 && (
-                      <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">Aucun lead.</p>
-                    )}
-                    {columnLeads.map((lead) => (
-                      <article key={lead.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-white">{lead.name || "Sans nom"}</p>
-                            <p className="mt-1 text-xs text-slate-500">{lead.city || "Ville inconnue"}</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(lead.id)}
-                            onChange={() => toggleSelected(lead.id)}
-                            className="h-4 w-4 rounded border-slate-700 bg-slate-950"
-                            aria-label={`Sélectionner ${lead.name || "ce lead"}`}
-                          />
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className={`rounded-full border px-2 py-1 text-xs ${badgeClass(lead.temperature)}`}>
-                            {lead.temperature || "—"}
-                          </span>
-                          <span className="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300">
-                            score {getScore(lead) ?? "—"}
-                          </span>
-                        </div>
-                        <a href={`/leads/${lead.id}`} className="mt-4 inline-block text-sm font-medium text-blue-400 hover:text-blue-300">
-                          Ouvrir
-                        </a>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+          <div className="w-full max-w-full overflow-x-auto overflow-y-hidden rounded-2xl">
+            <div className="min-w-max">
+              <LeadsTable
+                leads={filteredLeads}
+                selectedIds={selectedIds}
+                onToggleSelected={toggleSelected}
+                onToggleAll={toggleAll}
+              />
+            </div>
           </div>
+        )}
+
+        {!loading && !error && viewMode === "pipeline" && (
+          <PipelineKanban
+            leads={filteredLeads}
+            selectedIds={selectedIds}
+            onToggleSelected={toggleSelected}
+            onStageChange={updateLeadPipelineStage}
+          />
         )}
       </div>
     </AppShell>
   );
-}
-
-function badgeClass(value?: string | null) {
-  const normalized = normalize(value);
-  if (normalized === "hot") return "border-red-500/30 bg-red-500/15 text-red-300";
-  if (normalized === "warm") return "border-amber-500/30 bg-amber-500/15 text-amber-300";
-  if (normalized === "cold") return "border-blue-500/30 bg-blue-500/15 text-blue-300";
-  return "border-slate-700 bg-slate-800 text-slate-300";
 }
