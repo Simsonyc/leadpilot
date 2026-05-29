@@ -11,6 +11,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Leads", href: "/leads" },
+  { label: "Paramètres", href: "/settings" },
 ];
 
 export function Sidebar() {
