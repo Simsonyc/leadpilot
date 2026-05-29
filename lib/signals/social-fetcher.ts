@@ -134,7 +134,7 @@ export async function analyzeSocialLinks(
   const results: SocialAnalysis[] = [];
 
   const validLinks = Object.entries(links).filter(
-    ([, url]): url is string => Boolean(url),
+    (entry): entry is [string, string] => Boolean(entry[1]),
   );
 
   await Promise.allSettled(
