@@ -189,7 +189,7 @@ export async function analyzeWebsiteWithClaude(params: {
   responseTimeMs: number;
 }): Promise<DeepAnalysisResult> {
   const apiKey = ensureEnv("ANTHROPIC_API_KEY");
-  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
+  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
 
   const prompt = buildAnalysisPrompt(params);
 
@@ -210,7 +210,12 @@ export async function analyzeWebsiteWithClaude(params: {
   const json: unknown = await response.json();
 
   if (!response.ok) {
-    throw new AiEngineError("AI_PROVIDER_ERROR", `Claude API error ${response.status}`);
+    console.error("[website-analyzer] Claude API error", response.status, JSON.stringify(json));
+    throw new AiEngineError(
+      "AI_PROVIDER_ERROR",
+      `Claude API error ${response.status}: ${JSON.stringify(json)}`,
+      { status: response.status, body: json },
+    );
   }
 
   const content =
