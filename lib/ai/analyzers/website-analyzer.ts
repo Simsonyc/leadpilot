@@ -91,7 +91,7 @@ function buildAnalysisPrompt(params: {
   const contentSection = content?.bodyText
     ? `
 ## Contenu de la page d'accueil (extrait)
-${content.bodyText.slice(0, 3000)}`
+${content.bodyText.slice(0, 1500)}`
     : "";
 
   const signalsSection =
@@ -108,7 +108,7 @@ ${signals.map((s) => `- ${s.label} (${s.category ?? "général"})${s.evidence ? 
 ${socials
   .map(
     (s) =>
-      `- ${s.platform} : ${s.accessible ? "accessible" : "inaccessible"}${s.name ? ` — ${s.name}` : ""}${s.followersEstimate ? ` — ~${s.followersEstimate} abonnés` : ""}${s.description ? `\n  Description : ${s.description}` : ""}`,
+      `- ${s.platform} : ${s.accessible ? "accessible" : "inaccessible"}${s.name ? ` — ${s.name}` : ""}${s.followersEstimate ? ` — ~${s.followersEstimate} abonnés` : ""}${s.description ? ` — ${s.description.slice(0, 200)}` : ""}`,
   )
   .join("\n")}`
       : "## Aucun réseau social détecté sur le site";
