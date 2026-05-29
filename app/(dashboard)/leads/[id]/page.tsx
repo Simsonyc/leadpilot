@@ -6,12 +6,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LeadDetailHeader } from "@/components/leads/lead-detail-header";
 import { LeadScorePanel } from "@/components/leads/lead-score-panel";
 import { LeadSignalsPanel } from "@/components/leads/lead-signals-panel";
-import { LeadAiPanel } from "@/components/leads/lead-ai-panel";
+import { LeadAiPanelFull } from "@/components/leads/lead-ai-panel";
 import { LeadEventsPanel } from "@/components/leads/lead-events-panel";
 import { LeadNextActionsPanel } from "@/components/leads/lead-next-actions-panel";
 import type { LeadUi } from "@/types/lead-ui";
 
-type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh" | "ghl";
+type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh" | "ghl" | "deep";
 type ToastKind = "success" | "error";
 
 type Toast = {
@@ -142,7 +142,9 @@ export default function LeadDetailPage() {
             ? `/api/leads/${lead.id}/score`
             : action === "ghl"
               ? `/api/leads/${lead.id}/ghl-sync`
-              : `/api/leads/${lead.id}/generate-approach`;
+              : action === "deep"
+                ? `/api/leads/${lead.id}/analyze-deep`
+                : `/api/leads/${lead.id}/generate-approach`;
 
       const response = await fetch(endpoint, { method: "POST" });
       const result: unknown = await response.json();
@@ -173,7 +175,9 @@ export default function LeadDetailPage() {
             ? "Score recalculé et fiche mise à jour."
             : action === "ghl"
               ? "Lead synchronisé dans GoHighLevel."
-              : "Approche commerciale générée et enregistrée.",
+              : action === "deep"
+                ? "Analyse approfondie terminée."
+                : "Approche commerciale générée et enregistrée.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erreur inconnue.";
@@ -359,6 +363,17 @@ export default function LeadDetailPage() {
                 <button
                   type="button"
                   disabled={isActionRunning}
+                  onClick={() => void runLeadAction("deep")}
+                  className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === "deep"
+                    ? "Analyse en cours..."
+                    : "Analyse approfondie"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isActionRunning}
                   onClick={() => void runLeadAction("ghl")}
                   className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -490,7 +505,7 @@ export default function LeadDetailPage() {
 
           {/* AI panel + Timeline */}
           <div className="grid gap-6 lg:grid-cols-2">
-            <LeadAiPanel lead={lead} />
+            <LeadAiPanelFull lead={lead} />
             <LeadEventsPanel lead={lead} />
           </div>
         </div>
