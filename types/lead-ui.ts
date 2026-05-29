@@ -21,6 +21,7 @@ export type LeadNextActionUi = {
 export type LeadUi = {
   id: string;
   name?: string | null;
+  contactName?: string | null;
   sector?: string | null;
   verticale?: string | null;
   vertical?: string | null;
