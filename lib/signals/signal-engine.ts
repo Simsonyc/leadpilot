@@ -1,141 +1,156 @@
 import { prisma } from "@/lib/prisma";
-import { detectSeoSignals } from "./seo-signals";
-import { detectSocialSignals } from "./social-signals";
-import type { NormalizedWeakSignal, WebsiteAnalysisInput, WebsiteSnapshot } from "./types";
-import { detectWebsiteSignals } from "./website-signals";
+import { fetchWebsite } from "./website-fetcher";
+import {
+  runAllDetectors,
+  extractSocialLinks,
+  extractContactInfo,
+  type DetectedSignal,
+} from "./signal-detectors";
+import { scoreLead } from "@/lib/scoring/score-engine";
 
-function normalizeWebsiteUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim();
+type AnalyzeInput = {
+  leadId: string;
+  website: string;
+};
 
-  if (!trimmed) {
-    throw new Error("Website URL is empty.");
-  }
+type AnalyzeResult = {
+  leadId: string;
+  websiteReachable: boolean;
+  signalsDetected: number;
+  signalCodes: string[];
+  scores: object | null;
+  contactInfo: {
+    emails: string[];
+    phones: string[];
+  };
+  socialLinks: object;
+};
 
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
+export async function analyzeLeadWebsiteSignals(
+  input: AnalyzeInput,
+): Promise<AnalyzeResult> {
+  const { leadId, website } = input;
 
-  return `https://${trimmed}`;
-}
+  // 1. Fetch du site
+  const site = await fetchWebsite(website);
 
-async function fetchWebsiteSnapshot(website: string): Promise<WebsiteSnapshot> {
-  const requestedUrl = normalizeWebsiteUrl(website);
+  // 2. Extraction des infos de contact et réseaux sociaux
+  const contactInfo = extractContactInfo(site.html, site.$);
+  const socialLinks = extractSocialLinks(site.$, site.url);
 
-  const response = await fetch(requestedUrl, {
-    method: "GET",
-    redirect: "follow",
-    headers: {
-      "User-Agent": "LeadPilotBot/1.0 (+https://leadpilot.local)",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    },
+  // 3. Détection des signaux faibles
+  const detectedSignals: DetectedSignal[] = site.reachable
+    ? runAllDetectors(site)
+    : [];
+
+  // 4. Récupérer les WeakSignal existants en base pour les codes détectés
+  const codes = detectedSignals.map((s) => s.code);
+
+  const weakSignalsInDb = await prisma.weakSignal.findMany({
+    where: { code: { in: codes } },
+    select: { id: true, code: true, defaultWeight: true },
   });
 
-  const html = await response.text();
-  const finalUrl = response.url || requestedUrl;
+  const weakSignalMap = new Map(
+    weakSignalsInDb.map((ws) => [ws.code, ws]),
+  );
 
-  return {
-    requestedUrl,
-    finalUrl,
-    html,
-    status: response.status,
-    isHttps: finalUrl.startsWith("https://"),
-  };
-}
+  // 5. Supprimer les anciens signaux de ce lead
+  await prisma.leadWeakSignal.deleteMany({ where: { leadId } });
 
-function dedupeSignals(signals: NormalizedWeakSignal[]): NormalizedWeakSignal[] {
-  const map = new Map<string, NormalizedWeakSignal>();
+  // 6. Créer les nouveaux signaux détectés (uniquement ceux présents en base)
+  const now = new Date();
 
-  for (const signal of signals) {
-    map.set(signal.code, signal);
-  }
-
-  return Array.from(map.values());
-}
-
-async function persistSignals(leadId: string, signals: NormalizedWeakSignal[]) {
-  const persistedSignals = [];
-
-  for (const signal of signals) {
-    const weakSignal = await prisma.weakSignal.upsert({
-      where: {
-        code: signal.code,
-      },
-      update: {
-        label: signal.label,
-        description: signal.description,
-        category: signal.category,
-        defaultWeight: signal.defaultWeight,
-      },
-      create: {
-        code: signal.code,
-        label: signal.label,
-        description: signal.description,
-        category: signal.category,
-        defaultWeight: signal.defaultWeight,
-      },
-    });
-
-    const leadWeakSignal = await prisma.leadWeakSignal.upsert({
-      where: {
-        leadId_weakSignalId: {
-          leadId,
-          weakSignalId: weakSignal.id,
-        },
-      },
-      update: {
-        confidence: signal.confidence,
-        evidence: signal.evidence,
-        value: signal.value,
-        weightApplied: signal.weightApplied,
-      },
-      create: {
+  const signalsToCreate = detectedSignals
+    .filter((signal) => weakSignalMap.has(signal.code))
+    .map((signal) => {
+      const ws = weakSignalMap.get(signal.code)!;
+      return {
         leadId,
-        weakSignalId: weakSignal.id,
+        weakSignalId: ws.id,
         confidence: signal.confidence,
         evidence: signal.evidence,
         value: signal.value,
-        weightApplied: signal.weightApplied,
-      },
-      include: {
-        weakSignal: true,
-      },
+        weightApplied: ws.defaultWeight,
+      };
     });
 
-    persistedSignals.push(leadWeakSignal);
+  if (signalsToCreate.length > 0) {
+    await prisma.leadWeakSignal.createMany({ data: signalsToCreate });
   }
 
-  return persistedSignals;
-}
+  // 7. Mettre à jour le lead avec les données extraites
+  const updateData: Record<string, unknown> = {
+    lastActivityAt: now,
+  };
 
-export async function analyzeLeadWebsiteSignals(input: WebsiteAnalysisInput) {
-  const snapshot = await fetchWebsiteSnapshot(input.website);
+  // Enrichir email et téléphone si pas déjà renseignés
+  if (contactInfo.emails.length > 0) {
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId },
+      select: { email: true },
+    });
+    if (!lead?.email) {
+      updateData.email = contactInfo.emails[0];
+    }
+  }
 
-  const detectedSignals = dedupeSignals([
-    ...detectWebsiteSignals(snapshot),
-    ...detectSeoSignals(snapshot),
-    ...detectSocialSignals(snapshot),
-  ]);
-
-  const persistedSignals = await persistSignals(input.leadId, detectedSignals);
+  if (contactInfo.phones.length > 0) {
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId },
+      select: { phone: true },
+    });
+    if (!lead?.phone) {
+      updateData.phone = contactInfo.phones[0];
+    }
+  }
 
   await prisma.lead.update({
-    where: {
-      id: input.leadId,
-    },
+    where: { id: leadId },
+    data: updateData,
+  });
+
+  // 8. Créer un événement timeline
+  await prisma.leadTimelineEvent.create({
     data: {
-      lastActivityAt: new Date(),
+      leadId,
+      type: "SIGNALS_ANALYZED",
+      label: site.reachable
+        ? `${detectedSignals.length} signal(s) détecté(s) sur ${website}`
+        : `Site inaccessible : ${website}`,
+      payload: {
+        website,
+        reachable: site.reachable,
+        statusCode: site.statusCode,
+        signalCodes: codes,
+        emails: contactInfo.emails,
+        phones: contactInfo.phones,
+      },
     },
   });
 
+  // 9. Recalculer le score automatiquement
+  const scoreResult = await scoreLead(leadId).catch(() => null);
+
+  // 10. Créer événement timeline pour le score
+  if (scoreResult) {
+    await prisma.leadTimelineEvent.create({
+      data: {
+        leadId,
+        type: "SCORE_UPDATED",
+        label: `Score recalculé : ${scoreResult.scores.globalScore}/100`,
+        payload: { scores: scoreResult.scores },
+      },
+    });
+  }
+
   return {
-    snapshot: {
-      requestedUrl: snapshot.requestedUrl,
-      finalUrl: snapshot.finalUrl,
-      status: snapshot.status,
-      isHttps: snapshot.isHttps,
-    },
-    detectedCount: detectedSignals.length,
-    persistedCount: persistedSignals.length,
-    signals: persistedSignals,
+    leadId,
+    websiteReachable: site.reachable,
+    signalsDetected: signalsToCreate.length,
+    signalCodes: codes,
+    scores: scoreResult?.scores ?? null,
+    contactInfo,
+    socialLinks,
   };
 }
