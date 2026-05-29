@@ -22,6 +22,17 @@ export type ExtractedContent = {
   ogTitle: string | null;
   ogDescription: string | null;
   ogImage: string | null;
+  // Esthétique et modernité
+  hasTablesForLayout: boolean;
+  hasCssInline: boolean;
+  hasFrameset: boolean;
+  hasFlash: boolean;
+  hasViewportMeta: boolean;
+  hasMediaQueries: boolean;
+  hasBootstrap: boolean;
+  hasTailwind: boolean;
+  builderDetected: "Solocal" | "Wix" | "Jimdo" | "Weebly" | "Squarespace" | "WordPress" | "Webflow" | null;
+  fontFamiliesCount: number;
 };
 
 export async function checkSitemap(baseUrl: string): Promise<boolean> {
@@ -135,6 +146,70 @@ export function extractContent(
   // Canonical
   const canonicalUrl = $('link[rel="canonical"]').attr("href")?.trim() || null;
 
+  // ── Esthétique et modernité ──────────────────────────────────
+
+  // Design vieillissant
+  const hasTablesForLayout = $("table").length > 3;
+  const hasCssInline = $("[style]").length > 20;
+  const hasFrameset = $("frameset").length > 0;
+  const hasFlash =
+    html.includes("swfobject") ||
+    html.includes(".swf") ||
+    html.includes("application/x-shockwave-flash");
+
+  // Responsive
+  const hasViewportMeta = $('meta[name="viewport"]').length > 0;
+  const hasMediaQueries = html.includes("@media");
+  const hasBootstrap =
+    html.includes("bootstrap") || html.includes("cdn.bootstrapcdn.com");
+  const hasTailwind =
+    html.includes("tailwind") || html.includes("cdn.tailwindcss.com");
+
+  // Détection site builder
+  type Builder = "Solocal" | "Wix" | "Jimdo" | "Weebly" | "Squarespace" | "WordPress" | "Webflow" | null;
+  let builderDetected: Builder = null;
+
+  const htmlLower = html.toLowerCase();
+  if (
+    htmlLower.includes("solocal") ||
+    htmlLower.includes("pagesjaunes") ||
+    htmlLower.includes("local.fr")
+  ) {
+    builderDetected = "Solocal";
+  } else if (htmlLower.includes("wix.com") || htmlLower.includes("wixsite")) {
+    builderDetected = "Wix";
+  } else if (htmlLower.includes("jimdo")) {
+    builderDetected = "Jimdo";
+  } else if (htmlLower.includes("weebly")) {
+    builderDetected = "Weebly";
+  } else if (
+    htmlLower.includes("squarespace") ||
+    htmlLower.includes("sqsp.net")
+  ) {
+    builderDetected = "Squarespace";
+  } else if (
+    htmlLower.includes("wp-content") ||
+    htmlLower.includes("wp-includes") ||
+    htmlLower.includes("wordpress")
+  ) {
+    builderDetected = "WordPress";
+  } else if (htmlLower.includes("webflow")) {
+    builderDetected = "Webflow";
+  }
+
+  // Polices — compter les font-family uniques dans les styles inline
+  const fontFamilyMatches = html.match(/font-family\s*:\s*([^;}"']+)/gi) ?? [];
+  const uniqueFonts = new Set(
+    fontFamilyMatches.map((m) =>
+      m
+        .replace(/font-family\s*:\s*/i, "")
+        .split(",")[0]
+        .trim()
+        .toLowerCase(),
+    ),
+  );
+  const fontFamiliesCount = uniqueFonts.size;
+
   return {
     title,
     metaDescription,
@@ -157,5 +232,15 @@ export function extractContent(
     ogTitle,
     ogDescription,
     ogImage,
+    hasTablesForLayout,
+    hasCssInline,
+    hasFrameset,
+    hasFlash,
+    hasViewportMeta,
+    hasMediaQueries,
+    hasBootstrap,
+    hasTailwind,
+    builderDetected,
+    fontFamiliesCount,
   };
 }

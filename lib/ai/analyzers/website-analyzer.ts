@@ -85,7 +85,18 @@ function buildAnalysisPrompt(params: {
 - Temps de réponse : ${content.responseTimeMs}ms
 - Images total : ${content.imagesTotal} dont ${content.imagesWithAlt} avec alt
 - Liens internes : ${content.internalLinks} / Liens externes : ${content.externalLinks}
-- Nombre de mots estimé : ${content.wordCount}`
+- Nombre de mots estimé : ${content.wordCount}
+
+## Signaux esthétiques et modernité du design
+- Tables pour mise en page : ${content.hasTablesForLayout ? "Oui — design vieillissant" : "Non"}
+- CSS inline excessif : ${content.hasCssInline ? "Oui — manque de maintenabilité" : "Non"}
+- Frameset détecté : ${content.hasFrameset ? "Oui — très vieux site" : "Non"}
+- Flash détecté : ${content.hasFlash ? "Oui — technologie obsolète" : "Non"}
+- Viewport meta (responsive) : ${content.hasViewportMeta ? "Présent" : "Absent — probablement non mobile-friendly"}
+- Media queries CSS : ${content.hasMediaQueries ? "Présent" : "Absent"}
+- Framework CSS : ${content.hasBootstrap ? "Bootstrap" : content.hasTailwind ? "Tailwind" : "Aucun détecté"}
+- Site builder détecté : ${content.builderDetected ?? "Aucun"}
+- Nombre de familles de polices : ${content.fontFamiliesCount} ${content.fontFamiliesCount > 4 ? "(trop élevé — incohérence visuelle probable)" : ""}`
     : "## Site inaccessible — pas de données techniques disponibles";
 
   const contentSection = content?.bodyText
@@ -189,7 +200,7 @@ export async function analyzeWebsiteWithClaude(params: {
   responseTimeMs: number;
 }): Promise<DeepAnalysisResult> {
   const apiKey = ensureEnv("ANTHROPIC_API_KEY");
-  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
+  const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5-20251101";
 
   const prompt = buildAnalysisPrompt(params);
 
