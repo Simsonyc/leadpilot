@@ -58,7 +58,7 @@ export async function generateWithClaude(
     },
     async () => {
       const apiKey = ensureEnv("ANTHROPIC_API_KEY");
-      const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
+      const model = process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
 
       const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
         method: "POST",
