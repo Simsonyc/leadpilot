@@ -11,7 +11,7 @@ import { LeadEventsPanel } from "@/components/leads/lead-events-panel";
 import { LeadNextActionsPanel } from "@/components/leads/lead-next-actions-panel";
 import type { LeadUi } from "@/types/lead-ui";
 
-type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh";
+type LeadAction = "idle" | "analyze" | "score" | "approach" | "refresh" | "ghl";
 type ToastKind = "success" | "error";
 
 type Toast = {
@@ -140,7 +140,9 @@ export default function LeadDetailPage() {
           ? `/api/leads/${lead.id}/analyze-signals`
           : action === "score"
             ? `/api/leads/${lead.id}/score`
-            : `/api/leads/${lead.id}/generate-approach`;
+            : action === "ghl"
+              ? `/api/leads/${lead.id}/ghl-sync`
+              : `/api/leads/${lead.id}/generate-approach`;
 
       const response = await fetch(endpoint, { method: "POST" });
       const result: unknown = await response.json();
@@ -169,7 +171,9 @@ export default function LeadDetailPage() {
           ? "Signaux analysés et fiche mise à jour."
           : action === "score"
             ? "Score recalculé et fiche mise à jour."
-            : "Approche commerciale générée et enregistrée.",
+            : action === "ghl"
+              ? "Lead synchronisé dans GoHighLevel."
+              : "Approche commerciale générée et enregistrée.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erreur inconnue.";
@@ -350,6 +354,17 @@ export default function LeadDetailPage() {
                   {actionLoading === "approach"
                     ? "Génération..."
                     : "Générer approche commerciale"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isActionRunning}
+                  onClick={() => void runLeadAction("ghl")}
+                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === "ghl"
+                    ? "Sync GHL..."
+                    : "Synchroniser GHL"}
                 </button>
 
                 <button
